@@ -138,8 +138,16 @@ struct ChidiDocument: Codable, Equatable, Sendable {
         }
         for person in people { try unique(person.id); try title(person.name) }
         for board in boards { try unique(board.id); try title(board.title) }
+        var retainedTaskTitles = Set<String>()
         for task in tasks {
             try unique(task.id); try title(task.title)
+            if !isDeleted(task) {
+                let normalized = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "zh_Hans_CN"))
+                guard retainedTaskTitles.insert(normalized).inserted else {
+                    throw ChidiDataError.invalid("任务名称已存在，请修改名称后再保存。")
+                }
+            }
             if let id = task.boardID, !boardIDs.contains(id) { throw ChidiDataError.invalid("任务栏不存在。") }
             try deadline(task.deadline); try assignments(task.assignments)
             let stepIDs = Set(task.steps.map(\.id))

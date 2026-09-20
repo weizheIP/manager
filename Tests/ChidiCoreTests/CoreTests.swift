@@ -31,6 +31,18 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(try repo.load(), valid)
     }
 
+    func testTaskTitleMustBeUniqueUntilDeleted() throws {
+        let original = ChidiTask(title: "报价")
+        let duplicate = ChidiTask(title: "报价")
+        var document = ChidiDocument(tasks: [original, duplicate])
+        XCTAssertThrowsError(try document.validate()) { error in
+            XCTAssertEqual(error.localizedDescription, "任务名称已存在，请修改名称后再保存。")
+        }
+
+        document.tasks[1].deletedAt = .now
+        XCTAssertNoThrow(try document.validate())
+    }
+
     func testCorruptOrFutureDataIsNotSilentlyReplaced() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

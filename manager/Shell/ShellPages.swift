@@ -12,15 +12,8 @@ struct OverviewPage: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("次 第").font(.caption).tracking(6).foregroundStyle(ChidiStyle.purple)
-                    Text("事有次第\n心自从容").font(.system(.largeTitle, design: .serif)).lineSpacing(8)
-                    Text("每日道德经 · 原文内容准备中").font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(24).frame(maxWidth: .infinity, alignment: .leading)
-                .background { InkLandscape().background(ChidiStyle.card) }
-                .clipShape(RoundedRectangle(cornerRadius: 24))
-                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                DailyReadingCard()
+                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
             }
             Section("今日重点") {
                 if today.isEmpty { Text("今天暂无到期事项").foregroundStyle(.secondary) }
@@ -60,7 +53,7 @@ struct OverviewPage: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("更多", systemImage: "ellipsis.circle") {
                     NavigationLink("提醒设置") { ReminderSettingsView() }
-                NavigationLink("归档") { LibraryPage(isTrash: false) }
+                    NavigationLink("归档") { LibraryPage(isTrash: false) }
                     NavigationLink("废纸篓") { LibraryPage(isTrash: true) }
                 }
             }

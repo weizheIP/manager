@@ -170,6 +170,24 @@ struct LibraryPage: View {
                     }
                 }
             }
+            if isTrash {
+                Section("已移除的附件") {
+                    ForEach(store.document.attachments.filter { $0.deletedAt != nil }) { file in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(file.filename)
+                            let owner = store.task(file.taskID)
+                            Text(owner?.title ?? "任务不存在").font(.caption).foregroundStyle(.secondary)
+                            if let owner, !store.document.isDeleted(owner) {
+                                Button("恢复附件") {
+                                    store.change { doc in
+                                        if let index = doc.attachments.firstIndex(where: { $0.id == file.id }) { doc.attachments[index].deletedAt = nil }
+                                    }
+                                }.buttonStyle(.bordered)
+                            } else { Text("请先恢复所属任务，再恢复附件。").font(.caption) }
+                        }
+                    }
+                }
+            }
         }.navigationTitle(isTrash ? "废纸篓" : "归档").navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -128,6 +128,7 @@ struct AttachmentRecord: Codable, Identifiable, Equatable, Sendable {
     var relativePath: String
     var kind: Kind
     var createdAt = Date.now
+    var deletedAt: Date?
 }
 
 struct DeadlineOccurrence: Identifiable, Equatable, Sendable {

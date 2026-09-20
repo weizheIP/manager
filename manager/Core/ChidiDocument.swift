@@ -36,7 +36,7 @@ struct ChidiDocument: Codable, Equatable, Sendable {
             let personIDs = Set((task.assignments + task.steps.flatMap(\.assignments)).map(\.personID))
             let names = people.filter { personIDs.contains($0.id) }.flatMap { [$0.name] + $0.tags }
             let board = boards.first { $0.id == task.boardID }?.title ?? ""
-            let files = attachments.filter { $0.taskID == task.id }.map(\.filename)
+            let files = attachments.filter { $0.taskID == task.id && $0.deletedAt == nil }.map(\.filename)
             let fields = [task.title, task.notes, board] + task.steps.flatMap { [$0.title, $0.notes] } + names + files
             return fields.contains { $0.localizedStandardContains(term) }
         }
@@ -67,6 +67,22 @@ struct ChidiDocument: Codable, Equatable, Sendable {
         return result.sorted { $0.deadline.date < $1.deadline.date }
     }
 
+    mutating func upsertTask(_ value: ChidiTask, at now: Date = .now) {
+        var task = value
+        task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        task.updatedAt = now
+        let keptSteps = Set(task.steps.map(\.id))
+        for index in attachments.indices where attachments[index].taskID == task.id {
+            if let stepID = attachments[index].stepID, !keptSteps.contains(stepID) {
+                attachments[index].stepID = nil
+                attachments[index].deletedAt = attachments[index].deletedAt ?? now
+            }
+        }
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) { tasks[index] = task }
+        else { tasks.append(task) }
+        if let index = boards.firstIndex(where: { $0.id == task.boardID }) { boards[index].updatedAt = now }
+    }
+
     mutating func restoreTask(_ id: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].deletedAt = nil
@@ -84,7 +100,7 @@ struct ChidiDocument: Codable, Equatable, Sendable {
         boards.removeAll { boardIDs.contains($0.id) }
         let taskIDs = Set(tasks.map(\.id))
         let stepIDs = Set(tasks.flatMap(\.steps).map(\.id))
-        let orphaned = attachments.filter { !taskIDs.contains($0.taskID) || $0.stepID.map { !stepIDs.contains($0) } == true }
+        let orphaned = attachments.filter { ($0.deletedAt ?? .distantFuture) <= cutoff || !taskIDs.contains($0.taskID) || $0.stepID.map { !stepIDs.contains($0) } == true }
         let removedIDs = Set(orphaned.map(\.id))
         attachments.removeAll { removedIDs.contains($0.id) }
         return orphaned.map(\.relativePath)
@@ -151,7 +167,7 @@ struct ChidiDocument: Codable, Equatable, Sendable {
             guard let task = tasks.first(where: { $0.id == file.taskID }), file.stepID == nil || task.steps.contains(where: { $0.id == file.stepID }) else {
                 throw ChidiDataError.invalid("附件所属任务或步骤不存在。")
             }
-            guard !file.relativePath.isEmpty, !file.relativePath.hasPrefix("/"), !file.relativePath.split(separator: "/").contains("..") else {
+            guard AttachmentStorage.isSafePath(file.relativePath) else {
                 throw ChidiDataError.invalid("附件路径无效。")
             }
         }

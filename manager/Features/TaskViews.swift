@@ -150,7 +150,10 @@ struct TaskEditor: View {
                     }
                     Button("添加步骤", systemImage: "plus") { draft.steps.append(TaskStep(title: "")) }
                 }
-                Section("备注") { TextField("补充说明", text: $draft.notes, axis: .vertical).lineLimit(3...10) }
+                Section("备注") {
+                    TextField("补充说明", text: $draft.notes, axis: .vertical).lineLimit(3...10)
+                    Text("保存任务后，可在任务详情或展开的步骤中添加图片、文件和录音。").font(.caption).foregroundStyle(.secondary)
+                }
                 if let errorText { Section { Text(errorText).foregroundStyle(.red) } }
             }
             .navigationTitle(isNew ? "记下一件事" : "编辑任务")
@@ -231,6 +234,7 @@ struct TaskDetailView: View {
                                     Label("前置未完成：" + unfinished.map(\.title).joined(separator: "、") + "。仍可继续执行。", systemImage: "exclamationmark.triangle").font(.caption)
                                 }
                                 if !step.notes.isEmpty { Text(step.notes) }
+                                AttachmentRows(taskID: task.id, stepID: step.id)
                             } label: {
                                 Text("\(index + 1). \(step.title)")
                             }.id(step.id)
@@ -239,7 +243,10 @@ struct TaskDetailView: View {
                             Text("所有步骤已完成，你可以在下方确认完成总任务。").foregroundStyle(ChidiStyle.purple)
                         }
                     }
-                    Section("备注") { Text(task.notes.isEmpty ? "暂无备注" : task.notes).textSelection(.enabled) }
+                    Section("备注与附件") {
+                        Text(task.notes.isEmpty ? "暂无文字备注" : task.notes).textSelection(.enabled)
+                        AttachmentRows(taskID: task.id)
+                    }
                     if !store.document.isDeleted(task) {
                         Section {
                             Button(task.status == .completed ? "重新打开任务" : "完成任务") {

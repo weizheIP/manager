@@ -52,6 +52,7 @@ struct OverviewPage: View {
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { SearchPage() } label: { Image(systemName: "magnifyingglass").accessibilityLabel("全局搜索") } }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("更多", systemImage: "ellipsis.circle") {
+                    NavigationLink("AI 与 Siri") { IntelligenceSettingsView() }
                     NavigationLink("提醒设置") { ReminderSettingsView() }
                     NavigationLink("归档") { LibraryPage(isTrash: false) }
                     NavigationLink("废纸篓") { LibraryPage(isTrash: true) }
@@ -143,6 +144,7 @@ struct BoardsPage: View {
                 }
             }
             Section {
+                NavigationLink("AI 与 Siri") { IntelligenceSettingsView() }
                 NavigationLink("提醒设置") { ReminderSettingsView() }
                 NavigationLink("归档") { LibraryPage(isTrash: false) }
                 NavigationLink("废纸篓") { LibraryPage(isTrash: true) }

@@ -18,6 +18,8 @@ struct ContentView: View {
     @Environment(ReminderService.self) private var reminders
     @State private var selectedPage: AppPage = .overview
     @State private var showingQuickAdd = false
+    @State private var entryRouter = AppEntryRouter.shared
+    @State private var captureEntry: AppEntryRequest?
 
     var body: some View {
         NavigationStack {
@@ -35,17 +37,31 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.large)
             .safeAreaInset(edge: .bottom, spacing: 0) { navigationBar }
         }
-        .sheet(item: Binding(get: { reminders.route }, set: { reminders.route = $0 })) { route in
+        .sheet(item: Binding(get: { reminders.route }, set: { reminders.route = $0 }), onDismiss: { presentNextEntry() }) { route in
             NavigationStack {
                 TaskDetailView(taskID: route.taskID, initialStepID: route.stepID, initialPersonID: route.personID)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { reminders.route = nil } } }
             }
         }
         .tint(ChidiStyle.purple)
-        .sheet(isPresented: $showingQuickAdd) { QuickAddSheet() }
+        .sheet(isPresented: $showingQuickAdd, onDismiss: { captureEntry = nil; presentNextEntry() }) {
+            if let entry = captureEntry, case let .capture(text, boardID, smart) = entry.destination {
+                TaskEditor(task: ChidiTask(title: text, boardID: boardID), isNew: true, startParsing: smart).id(entry.id)
+            } else { QuickAddSheet() }
+        }
+        .onChange(of: entryRouter.pending.count, initial: true) { _, _ in presentNextEntry() }
         .alert("数据提示", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("知道了") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
+    }
+
+    private func presentNextEntry() {
+        guard !showingQuickAdd, reminders.route == nil, let entry = entryRouter.pending.first else { return }
+        switch entry.destination {
+        case .capture: captureEntry = entry; showingQuickAdd = true
+        case .detail(let id): reminders.route = ReminderRoute(taskID: id)
+        }
+        entryRouter.pending.removeFirst()
     }
 
     private var navigationBar: some View {

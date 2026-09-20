@@ -3,6 +3,7 @@ import Observation
 
 @MainActor @Observable
 final class TaskStore {
+    static let shared = TaskStore()
     private(set) var document = ChidiDocument()
     private(set) var isReadOnly = false
     var errorMessage: String?
@@ -56,8 +57,13 @@ final class TaskStore {
     }
 
     @discardableResult
-    func saveTask(_ task: ChidiTask) -> Bool {
-        change { $0.upsertTask(task) }
+    func saveTask(_ task: ChidiTask, adding people: [Person] = [], board: TaskBoard? = nil) -> Bool {
+        change { doc in
+            let assigned = Set((task.assignments + task.steps.flatMap(\.assignments)).map(\.personID))
+            for person in people where assigned.contains(person.id) && !doc.people.contains(where: { $0.id == person.id }) { doc.people.append(person) }
+            if let board, task.boardID == board.id, !doc.boards.contains(where: { $0.id == board.id }) { doc.boards.append(board) }
+            doc.upsertTask(task)
+        }
     }
 
     func task(_ id: UUID) -> ChidiTask? { document.tasks.first { $0.id == id } }

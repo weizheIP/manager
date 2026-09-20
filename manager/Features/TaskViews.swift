@@ -54,11 +54,12 @@ struct DeadlineEditor: View {
 struct AssignmentEditor: View {
     @Environment(TaskStore.self) private var store
     @Binding var assignments: [Assignment]
+    var additionalPeople: [Person] = []
     var body: some View {
-        if store.document.people.isEmpty {
+        if store.document.people.isEmpty && additionalPeople.isEmpty {
             Text("可先在人员页添加负责人；也可以暂时不分配。").font(.caption).foregroundStyle(.secondary)
         }
-        ForEach(store.document.people) { person in
+        ForEach(store.document.people + additionalPeople) { person in
             Toggle(person.name, isOn: Binding(
                 get: { assignments.contains { $0.personID == person.id } },
                 set: { selected in
@@ -79,15 +80,27 @@ struct TaskEditor: View {
     @State private var draft: ChidiTask
     private let original: ChidiTask
     let isNew: Bool
+    private let startParsing: Bool
+    @State private var didStartParsing = false
     @State private var discard = false
     @State private var confirmCompletion = false
     @State private var confirmIncomplete = false
     @State private var errorText: String?
+    @State private var proposal: NaturalLanguageDraft?
+    @State private var pendingPeople: [Person] = []
+    @State private var pendingBoard: TaskBoard?
+    @State private var aiSource: String?
+    @State private var showMore = false
+    @State private var showSpeech = false
+    @State private var parsing = false
+    @State private var parseID = UUID()
+    @State private var parseTask: Task<Void, Never>?
 
-    init(task: ChidiTask = ChidiTask(title: ""), isNew: Bool = false) {
+    init(task: ChidiTask = ChidiTask(title: ""), isNew: Bool = false, startParsing: Bool = false) {
         original = task
         _draft = State(initialValue: task)
         self.isNew = isNew
+        self.startParsing = startParsing
     }
 
     var body: some View {
@@ -95,13 +108,29 @@ struct TaskEditor: View {
             Form {
                 Section {
                     TextField("任务名称（唯一必填）", text: $draft.title, axis: .vertical)
-                        .accessibilityIdentifier("quickAdd.name")
+                        .accessibilityIdentifier("quickAdd.name").disabled(parsing)
                 } footer: { Text("先记下名称，其余信息可以稍后补充。") }
+                if isNew {
+                    Section {
+                        HStack {
+                            Button("语音输入", systemImage: "mic") { showSpeech = true }.disabled(parsing)
+                            Spacer()
+                            Button(parsing ? "取消解析" : "AI 解析", systemImage: "sparkles") {
+                                if parsing { cancelParsing() } else { parse() }
+                            }.disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }.buttonStyle(.borderless)
+                        if parsing { ProgressView("正在提取你明确说出的内容…") }
+                        if let errorText { Text(errorText).font(.footnote).foregroundStyle(.red) }
+                        if let aiSource {
+                            Text("待确认 · 原始输入：\(aiSource)").font(.caption).foregroundStyle(.secondary)
+                        } else { Text("AI 使用本地模型；只输入名称也可直接保存。").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
                 Section {
-                    DisclosureGroup("更多设置") {
+                    DisclosureGroup("更多设置", isExpanded: $showMore) {
                         Picker("任务栏", selection: $draft.boardID) {
                             Text("未分类").tag(Optional<UUID>.none)
-                            ForEach(store.document.boards.filter { $0.deletedAt == nil }) { Text($0.title).tag(Optional($0.id)) }
+                            ForEach(store.document.boards.filter { $0.deletedAt == nil } + (pendingBoard.map { [$0] } ?? [])) { Text($0.title).tag(Optional($0.id)) }
                         }
                         Picker("四象限", selection: $draft.quadrant) {
                             Text("未分类").tag(Optional<Quadrant>.none)
@@ -115,7 +144,7 @@ struct TaskEditor: View {
                         DeadlineEditor(deadline: $draft.deadline, title: "总任务 DDL")
                     }
                 }
-                Section("负责人") { DisclosureGroup("分配负责人和个人 DDL") { AssignmentEditor(assignments: $draft.assignments) } }
+                Section("负责人") { DisclosureGroup("分配负责人和个人 DDL") { AssignmentEditor(assignments: $draft.assignments, additionalPeople: pendingPeople) } }
                 Section("步骤") {
                     ForEach($draft.steps) { $step in
                         DisclosureGroup(step.title.isEmpty ? "新步骤" : step.title) {
@@ -128,7 +157,7 @@ struct TaskEditor: View {
                                 Label("有前置步骤尚未完成，仍可继续。", systemImage: "exclamationmark.triangle").font(.caption)
                             }
                             DeadlineEditor(deadline: $step.deadline, title: "步骤 DDL")
-                            DisclosureGroup("步骤负责人") { AssignmentEditor(assignments: $step.assignments) }
+                            DisclosureGroup("步骤负责人") { AssignmentEditor(assignments: $step.assignments, additionalPeople: pendingPeople) }
                             DisclosureGroup("前置步骤（不选即为并行）") {
                                 ForEach(draft.steps.filter { $0.id != step.id }) { previous in
                                     Toggle(previous.title, isOn: Binding(
@@ -154,7 +183,7 @@ struct TaskEditor: View {
                     TextField("补充说明", text: $draft.notes, axis: .vertical).lineLimit(3...10)
                     Text("保存任务后，可在任务详情或展开的步骤中添加图片、文件和录音。").font(.caption).foregroundStyle(.secondary)
                 }
-                if let errorText { Section { Text(errorText).foregroundStyle(.red) } }
+                if !isNew, let errorText { Section { Text(errorText).foregroundStyle(.red) } }
             }
             .navigationTitle(isNew ? "记下一件事" : "编辑任务")
             .navigationBarTitleDisplayMode(.inline)
@@ -164,11 +193,11 @@ struct TaskEditor: View {
                         .accessibilityIdentifier("quickAdd.close")
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("保存") {
+                    Button(aiSource == nil ? "保存" : "确认添加") {
                         if draft.status == .completed && original.status != .completed { confirmCompletion = true }
                         else { save() }
                     }
-                    .disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(parsing || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("task.save")
                 }
                 ToolbarItem(placement: .bottomBar) { EditButton() }
@@ -185,12 +214,39 @@ struct TaskEditor: View {
                 Button("仍然完成") { save() }
             } message: { Text("这些步骤不会自动变为完成，是否继续？") }
         }
-        .interactiveDismissDisabled(draft != original)
+        .sheet(isPresented: $showSpeech) {
+            SpeechInputSheet { text in draft.title = text }
+        }
+        .sheet(item: $proposal) { value in
+            AIReviewView(proposal: value) { task, people, board in
+                draft = task; pendingPeople = people; pendingBoard = board
+                aiSource = value.source; showMore = true
+            }
+        }
+        .task { if startParsing && !didStartParsing { didStartParsing = true; parse() } }
+        .onDisappear { cancelParsing() }
+        .interactiveDismissDisabled(draft != original || parsing)
         .tint(ChidiStyle.purple)
     }
 
+    private func cancelParsing() { parseID = UUID(); parseTask?.cancel(); parseTask = nil; parsing = false }
+    private func parse() {
+        cancelParsing()
+        let source = draft.title
+        let id = UUID(); parseID = id; parsing = true; errorText = nil
+        parseTask = Task {
+            do {
+                var result = try await LocalTaskParser.parse(source)
+                result.task.boardID = original.boardID
+                guard parseID == id, !Task.isCancelled else { return }
+                proposal = result
+            } catch is CancellationError {} catch { if parseID == id { errorText = error.localizedDescription } }
+            if parseID == id { parsing = false; parseTask = nil }
+        }
+    }
+
     private func save() {
-        if store.saveTask(draft) { dismiss() }
+        if store.saveTask(draft, adding: pendingPeople, board: pendingBoard) { dismiss() }
         else { errorText = store.errorMessage; store.errorMessage = nil }
     }
 }

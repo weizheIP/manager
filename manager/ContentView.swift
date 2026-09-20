@@ -14,28 +14,20 @@ private enum AppPage: String {
 }
 
 struct ContentView: View {
+    @Environment(TaskStore.self) private var store
+    @Environment(ReminderService.self) private var reminders
     @State private var selectedPage: AppPage = .overview
     @State private var showingQuickAdd = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Label("功能预览 · 任务管理即将开放", systemImage: "sparkle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    switch selectedPage {
-                    case .overview: OverviewPage()
-                    case .boards: BoardsPage()
-                    case .calendar: CalendarPage()
-                    case .people: PeoplePage()
-                    }
+            Group {
+                switch selectedPage {
+                case .overview: OverviewPage()
+                case .boards: BoardsPage()
+                case .calendar: CalendarPage()
+                case .people: PeoplePage()
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 32)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
             }
             .id(selectedPage)
             .background(ChidiStyle.paper)
@@ -43,8 +35,17 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.large)
             .safeAreaInset(edge: .bottom, spacing: 0) { navigationBar }
         }
+        .sheet(item: Binding(get: { reminders.route }, set: { reminders.route = $0 })) { route in
+            NavigationStack {
+                TaskDetailView(taskID: route.taskID, initialStepID: route.stepID, initialPersonID: route.personID)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { reminders.route = nil } } }
+            }
+        }
         .tint(ChidiStyle.purple)
         .sheet(isPresented: $showingQuickAdd) { QuickAddSheet() }
+        .alert("数据提示", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+            Button("知道了") { store.errorMessage = nil }
+        } message: { Text(store.errorMessage ?? "") }
     }
 
     private var navigationBar: some View {
@@ -95,5 +96,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView().environment(TaskStore(url: URL.temporaryDirectory.appending(path: "chidi-preview.json"))).environment(ReminderService())
 }

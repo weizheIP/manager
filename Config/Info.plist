@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSAlarmKitUsageDescription</key>
+    <string>用于你主动设置的强提醒，在指定时间通过系统闹钟提醒任务、步骤或个人 DDL。</string>
+</dict>
+</plist>

@@ -128,6 +128,31 @@ struct AttachmentRows: View {
     private func takeError() { errorText = store.errorMessage; store.errorMessage = nil }
 }
 
+struct SavedTaskAttachments: View {
+    @Environment(TaskStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let taskID: UUID
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    AttachmentRows(taskID: taskID)
+                } header: {
+                    Text(store.task(taskID)?.title ?? "任务附件")
+                } footer: {
+                    Text("附件已关联到刚刚保存的任务。步骤附件可在任务详情中展开对应步骤后添加。")
+                }
+            }
+            .navigationTitle("添加附件")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
+            }
+        }
+    }
+}
+
 struct AudioNoteSheet: View {
     @Environment(TaskStore.self) private var store
     @Environment(\.dismiss) private var dismiss

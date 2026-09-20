@@ -95,6 +95,21 @@ struct TaskEditor: View {
     @State private var parsing = false
     @State private var parseID = UUID()
     @State private var parseTask: Task<Void, Never>?
+    @State private var openAttachmentsAfterSave = false
+    @State private var showSavedAttachments = false
+
+    private var selectableBoards: [TaskBoard] {
+        var result = store.document.activeBoards
+        if !isNew, let id = draft.boardID,
+           let current = store.document.boards.first(where: { $0.id == id }),
+           !result.contains(where: { $0.id == id }) {
+            result.append(current)
+        }
+        if let pendingBoard, !result.contains(where: { $0.id == pendingBoard.id }) {
+            result.append(pendingBoard)
+        }
+        return result
+    }
 
     init(task: ChidiTask = ChidiTask(title: ""), isNew: Bool = false, startParsing: Bool = false) {
         original = task
@@ -130,7 +145,10 @@ struct TaskEditor: View {
                     DisclosureGroup("更多设置", isExpanded: $showMore) {
                         Picker("任务栏", selection: $draft.boardID) {
                             Text("未分类").tag(Optional<UUID>.none)
-                            ForEach(store.document.boards.filter { $0.deletedAt == nil } + (pendingBoard.map { [$0] } ?? [])) { Text($0.title).tag(Optional($0.id)) }
+                            ForEach(selectableBoards) { board in
+                                Text(board.title + (board.archivedAt == nil ? "" : "（已归档）"))
+                                    .tag(Optional(board.id))
+                            }
                         }
                         Picker("四象限", selection: $draft.quadrant) {
                             Text("未分类").tag(Optional<Quadrant>.none)
@@ -147,7 +165,7 @@ struct TaskEditor: View {
                 Section("负责人") { DisclosureGroup("分配负责人和个人 DDL") { AssignmentEditor(assignments: $draft.assignments, additionalPeople: pendingPeople) } }
                 Section("步骤") {
                     ForEach($draft.steps) { $step in
-                        DisclosureGroup(step.title.isEmpty ? "新步骤" : step.title) {
+                        DisclosureGroup {
                             TextField("步骤名称", text: $step.title)
                             Picker("状态", selection: $step.status) {
                                 Text("未设置").tag(Optional<WorkStatus>.none)
@@ -170,6 +188,9 @@ struct TaskEditor: View {
                                 }
                             }
                             TextField("步骤备注", text: $step.notes, axis: .vertical).lineLimit(2...6)
+                        } label: {
+                            let number = (draft.steps.firstIndex(where: { $0.id == step.id }) ?? 0) + 1
+                            Text("\(number). \(step.title.isEmpty ? "新步骤" : step.title)")
                         }
                     }
                     .onMove { draft.steps.move(fromOffsets: $0, toOffset: $1) }
@@ -183,6 +204,17 @@ struct TaskEditor: View {
                     TextField("补充说明", text: $draft.notes, axis: .vertical).lineLimit(3...10)
                     Text("保存任务后，可在任务详情或展开的步骤中添加图片、文件和录音。").font(.caption).foregroundStyle(.secondary)
                 }
+                if isNew {
+                    Section("附件") {
+                        Button("保存并继续添加附件", systemImage: "paperclip") {
+                            requestSave(openAttachments: true)
+                        }
+                        .disabled(parsing || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("task.saveAndAddAttachments")
+                        Text("任务确认保存后立即进入附件页；选择附件前不会提前写入任务。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 if !isNew, let errorText { Section { Text(errorText).foregroundStyle(.red) } }
             }
             .navigationTitle(isNew ? "记下一件事" : "编辑任务")
@@ -194,8 +226,7 @@ struct TaskEditor: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(aiSource == nil ? "保存" : "确认添加") {
-                        if draft.status == .completed && original.status != .completed { confirmCompletion = true }
-                        else { save() }
+                        requestSave(openAttachments: false)
                     }
                     .disabled(parsing || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("task.save")
@@ -223,6 +254,9 @@ struct TaskEditor: View {
                 aiSource = value.source; showMore = true
             }
         }
+        .sheet(isPresented: $showSavedAttachments, onDismiss: { dismiss() }) {
+            SavedTaskAttachments(taskID: draft.id)
+        }
         .task { if startParsing && !didStartParsing { didStartParsing = true; parse() } }
         .onDisappear { cancelParsing() }
         .interactiveDismissDisabled(draft != original || parsing)
@@ -230,6 +264,11 @@ struct TaskEditor: View {
     }
 
     private func cancelParsing() { parseID = UUID(); parseTask?.cancel(); parseTask = nil; parsing = false }
+    private func requestSave(openAttachments: Bool) {
+        openAttachmentsAfterSave = openAttachments
+        if draft.status == .completed && original.status != .completed { confirmCompletion = true }
+        else { save() }
+    }
     private func parse() {
         cancelParsing()
         let source = draft.title
@@ -246,7 +285,10 @@ struct TaskEditor: View {
     }
 
     private func save() {
-        if store.saveTask(draft, adding: pendingPeople, board: pendingBoard) { dismiss() }
+        if store.saveTask(draft, adding: pendingPeople, board: pendingBoard) {
+            if openAttachmentsAfterSave { showSavedAttachments = true }
+            else { dismiss() }
+        }
         else { errorText = store.errorMessage; store.errorMessage = nil }
     }
 }

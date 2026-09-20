@@ -42,11 +42,11 @@ struct AIReviewView: View {
             if let id = proposal.task.boardID, let name = store.document.boards.first(where: { $0.id == id })?.title { LabeledContent("入口指定任务栏", value: name) }
             LabeledContent("四象限", value: proposal.task.quadrant?.title ?? "未设置")
             LabeledContent("状态", value: proposal.task.status?.title ?? "未设置")
+            if !proposal.task.waitingReason.isEmpty { LabeledContent("等待原因", value: proposal.task.waitingReason) }
+            if !proposal.task.notes.isEmpty { LabeledContent("任务备注", value: proposal.task.notes) }
             if let ddl = proposal.task.deadline {
                 DeadlineLabel(deadline: ddl, kind: "总任务 DDL")
-                ForEach(ddl.reminders) { reminder in
-                    Text("提前 \(reminder.amount) \(reminder.unit.title) · \(reminder.kind == .strong ? "强提醒" : "普通提醒")")
-                }
+                reminderRows(ddl)
             } else { Text("总任务 DDL：未设置") }
             ForEach(proposal.task.steps) { step in
                 VStack(alignment: .leading) {
@@ -56,9 +56,20 @@ struct AIReviewView: View {
                     if !people.isEmpty { Text("负责人：" + people.joined(separator: "、")).font(.caption) }
                     let prior = proposal.task.steps.filter { step.predecessorIDs.contains($0.id) }
                     if !prior.isEmpty { Text("前置步骤：" + prior.map(\.title).joined(separator: "、")).font(.caption) }
-                    if let ddl = step.deadline { DeadlineLabel(deadline: ddl, kind: "步骤 DDL") }
+                    if !step.notes.isEmpty { Text("备注：" + step.notes).font(.caption) }
+                    if let ddl = step.deadline {
+                        DeadlineLabel(deadline: ddl, kind: "步骤 DDL")
+                        reminderRows(ddl)
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func reminderRows(_ deadline: Deadline) -> some View {
+        ForEach(deadline.reminders) { reminder in
+            Text("提前 \(reminder.amount) \(reminder.unit.title) · \(reminder.kind == .strong ? "强提醒" : "普通提醒")")
+                .font(.caption)
         }
     }
 
@@ -91,9 +102,15 @@ struct AIReviewView: View {
                     }
                 }
                 ForEach(proposal.peopleNames, id: \.self) { name in
-                    if let ddl = proposal.taskPersonalDeadlines[name] { DeadlineLabel(deadline: ddl, kind: "\(name)的个人 DDL") }
+                    if let ddl = proposal.taskPersonalDeadlines[name] {
+                        DeadlineLabel(deadline: ddl, kind: "\(name)的个人 DDL")
+                        reminderRows(ddl)
+                    }
                     ForEach(proposal.task.steps) { step in
-                        if let ddl = proposal.stepPersonalDeadlines[step.id]?[name] { DeadlineLabel(deadline: ddl, kind: "\(step.title) · \(name)的个人 DDL") }
+                        if let ddl = proposal.stepPersonalDeadlines[step.id]?[name] {
+                            DeadlineLabel(deadline: ddl, kind: "\(step.title) · \(name)的个人 DDL")
+                            reminderRows(ddl)
+                        }
                     }
                 }
                 Text("同名人员请核对标签或备注；如仍无法区分，可先到人员页补充信息。").font(.caption).foregroundStyle(.secondary)

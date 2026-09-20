@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>次第</string>
+    <key>NSAlarmKitUsageDescription</key>
+    <string>用于你主动设置的强提醒，在指定时间通过系统闹钟提醒任务、步骤或个人 DDL。</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>在你开始录音或语音输入时使用麦克风，录音附件保存在本机。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>在你选择语音输入时将说话内容转为可编辑的任务文字，本应用仅启用设备上的语音识别。</string>
+</dict>
+</plist>

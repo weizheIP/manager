@@ -19,3 +19,7 @@ xcuserdata/
 *.mobileprovision
 *.provisionprofile
 AuthKey_*.p8
+
+# Swift Package core tests
+.build/
+.swiftpm/

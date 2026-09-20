@@ -77,6 +77,7 @@ struct AssignmentEditor: View {
 struct TaskEditor: View {
     @Environment(TaskStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var draft: ChidiTask
     private let original: ChidiTask
     let isNew: Bool
@@ -127,13 +128,7 @@ struct TaskEditor: View {
                 } footer: { Text("先记下名称，其余信息可以稍后补充。") }
                 if isNew {
                     Section {
-                        HStack {
-                            Button("语音输入", systemImage: "mic") { showSpeech = true }.disabled(parsing)
-                            Spacer()
-                            Button(parsing ? "取消解析" : "AI 解析", systemImage: "sparkles") {
-                                if parsing { cancelParsing() } else { parse() }
-                            }.disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }.buttonStyle(.borderless)
+                        captureActions.buttonStyle(.borderless)
                         if parsing { ProgressView("正在提取你明确说出的内容…") }
                         if let errorText { Text(errorText).font(.footnote).foregroundStyle(.red) }
                         if let aiSource {
@@ -264,6 +259,28 @@ struct TaskEditor: View {
     }
 
     private func cancelParsing() { parseID = UUID(); parseTask?.cancel(); parseTask = nil; parsing = false }
+    @ViewBuilder private var captureActions: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 14) {
+                speechAction.frame(maxWidth: .infinity, alignment: .leading)
+                parseAction.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            HStack {
+                speechAction
+                Spacer()
+                parseAction
+            }
+        }
+    }
+    private var speechAction: some View {
+        Button("语音输入", systemImage: "mic") { showSpeech = true }.disabled(parsing)
+    }
+    private var parseAction: some View {
+        Button(parsing ? "取消解析" : "AI 解析", systemImage: "sparkles") {
+            if parsing { cancelParsing() } else { parse() }
+        }.disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
     private func requestSave(openAttachments: Bool) {
         openAttachmentsAfterSave = openAttachments
         if draft.status == .completed && original.status != .completed { confirmCompletion = true }
